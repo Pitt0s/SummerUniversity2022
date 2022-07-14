@@ -4,8 +4,22 @@
 
 #include "util.hpp"
 
-// TODO : implement a kernel that reverses a string of length n in place
-// void reverse_string(char* str, int n)
+// implement a kernel that reverses a string of length n in place
+__global__
+void reverse_string(char* str, int n)
+{
+	__shared__ char buffer[1024];
+	
+	int block_start = blockDim.x * blockIdx.x;
+	int lid = threadIdx.x;
+	int gid = lid + block_start;
+
+	if (gid < n)
+	{
+		buffer[lid] = str[n-gid-1];
+		str[gid] = buffer[lid];
+	}
+}
 
 int main(int argc, char** argv) {
     // check that the user has passed a string to reverse
@@ -23,6 +37,9 @@ int main(int argc, char** argv) {
     std::cout << "string to reverse:\n" << string << "\n";
 
     // TODO : call the string reverse function
+	int block_dim = 128;
+	int numBlock = (n-1)/block_dim + 1;
+	reverse_string<<<numBlock, block_dim>>>(string, n);
 
     // print reversed string
     cudaDeviceSynchronize();
