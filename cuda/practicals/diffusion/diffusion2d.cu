@@ -20,6 +20,17 @@ void write_to_file(int nx, int ny, double* data);
 __global__
 void diffusion(double *x0, double *x1, int nx, int ny, double dt) {
 // TODO : implement stencil using 2d launch configuration
+	int ix = threadIdx.x + blockIdx.x * blockDim.x + 1;
+	int iy = threadIdx.y + blockIdx.y * blockDim.y + 1;
+
+
+        int i = iy*nx + ix;
+	if ( ix < nx-1 && iy < ny-1)
+	{
+    	    x1[i] = x0[i] + dt * (-4.*x0[i]
+                  + x0[i-nx] + x0[i+nx]
+                  + x0[i-1] + x0[i+1]);
+	}
 // NOTE : i-major ordering, i.e. x[i,j] is indexed at location [i+j*nx]
 //  for(i=1; i<nx-1; ++i) {
 //    for(j=1; j<ny-1; ++j) {
@@ -66,12 +77,15 @@ int main(int argc, char** argv) {
 
     cuda_stream stream;
     cuda_stream copy_stream();
+
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((nx-3)/threadsPerBlock.x +1, (ny-3)/threadsPerBlock.y +1);
     auto start_event = stream.enqueue_event();
 
     // time stepping loop
     for(auto step=0; step<nsteps; ++step) {
         // TODO: launch the diffusion kernel in 2D
-
+	diffusion<<<numBlocks, threadsPerBlock>>>(x0, x1, nx, ny, dt); 
         std::swap(x0, x1);
     }
     auto stop_event = stream.enqueue_event();
