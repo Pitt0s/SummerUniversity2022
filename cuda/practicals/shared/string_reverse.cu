@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
 
     std::cout << "string to reverse:\n" << string << "\n";
 
-    // TODO : call the string reverse function
+    // call the string reverse function
 	int block_dim = 128;
 	int numBlock = (n-1)/block_dim + 1;
 	reverse_string<<<numBlock, block_dim>>>(string, n);
