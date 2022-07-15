@@ -1,6 +1,7 @@
 #include <iostream>
-
 #include <cuda.h>
+#include <thrust/reduce.h>
+#include <thrust/execution_policy.h>
 
 #include "util.hpp"
 
@@ -13,18 +14,27 @@ double dot_host(const double *x, const double* y, int n) {
     return sum;
 }
 
-// TODO implement dot product kernel
-template <int THREADS>
+// implement dot product kernel
 __global__
 void dot_gpu_kernel(const double *x, const double* y, double *result, int n) {
+
+	int id = blockDim.x * blockIdx.x + threadIdx.x;
+	if (id < n)
+	{
+		result[id] = x[id] * y[id];
+	}
 }
 
 double dot_gpu(const double *x, const double* y, int n) {
     static double* result = malloc_managed<double>(1);
-    // TODO call dot product kernel
+    // call dot product kernel
 
-    cudaDeviceSynchronize();
-    return *result;
+	int block_dim = 128;
+	int grid_dim  = (n-1)/block_dim + 1;
+	dot_gpu_kernel<<<grid_dim, block_dim>>>(x, y, result, n);
+
+	double sum = thrust::reduce(thrust::device, result, result + n, 0);
+    return sum;
 }
 
 int main(int argc, char** argv) {
