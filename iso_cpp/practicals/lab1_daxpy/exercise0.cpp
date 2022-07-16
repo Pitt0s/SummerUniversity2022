@@ -21,6 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -102,4 +103,11 @@ void daxpy(double a, std::vector<double> const &x, std::vector<double> &y) {
   assert(x.size() == y.size());
   // TODO: Implement using the C++ Standard Template Library algorithms
   // ...
+  std::transform(x.begin(), x.end(), y.begin(), y.begin(), [a](const double x, const double y) {
+     return a * x + y; 
+  });
+  // std::for_each(y.begin(), y.end(), [x = x.data(), y = y.data(), a](const double &el) {
+  //     ptrdiff_t i = &el - y;
+  //     y[i] += a * x[i];
+  // });
 }
