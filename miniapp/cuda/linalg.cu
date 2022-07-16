@@ -15,7 +15,6 @@ namespace linalg {
 
 namespace kernels {
 
-// TODO implement the missing linalg kernels
 __global__
 void add_scaled_diff(
         double *y,
@@ -28,6 +27,88 @@ void add_scaled_diff(
     auto i = threadIdx.x + blockDim.x*blockIdx.x;
     if(i < n) {
         y[i] = x[i] + alpha * (l[i] - r[i]);
+    }
+}
+
+// sets x := value
+// x is a vector
+// value is a scalar
+__global__
+void fill(
+        double* x,
+        const double value,
+        const int n)
+{
+    auto i = threadIdx.x + blockDim.x*blockIdx.x;
+    if(i < n) {
+        x[i] = value;
+    }
+}
+
+// computes y := alpha*x + y
+// x and y are vectors
+// alpha is a scalar
+__global__
+void axpy(
+        double *y,
+        const double* x,
+        const double alpha,
+        const int n)
+{
+    auto i = threadIdx.x + blockDim.x*blockIdx.x;
+    if(i < n) {
+        y[i] += alpha * x[i];
+    }
+}
+
+// computes y = alpha*(l-r)
+// y, l and r are vectors of length N
+// alpha is a scalar
+__global__
+void scaled_diff(
+        double *y,
+        const double *l,
+        const double *r,
+        const double alpha,
+        const int n)
+{
+    auto i = threadIdx.x + blockDim.x*blockIdx.x;
+    if(i < n) {
+        y[i] = alpha * (l[i] - r[i]);
+    }
+}
+
+// computes y := alpha*x
+// alpha is scalar
+// y and x are vectors
+__global__
+void scale(
+        double *y,
+        const double* x,
+        const double alpha,
+        const int n)
+{
+    auto i = threadIdx.x + blockDim.x*blockIdx.x;
+    if(i < n) {
+        y[i] = alpha * x[i];
+    }
+}
+
+// computes linear combination of two vectors y := alpha*x + beta*z
+// alpha and beta are scalar
+// y, x and z are vectors
+__global__
+void lcomb(
+        double *y,
+        const double* x,
+        const double* z,
+        const double alpha,
+        const double beta,
+        const int n)
+{
+    auto i = threadIdx.x + blockDim.x*blockIdx.x;
+    if(i < n) {
+        y[i] = alpha * x[i] + beta * z[i];
     }
 }
 
@@ -81,7 +162,7 @@ void cg_init(int nx, int ny)
 //  blas level 1 reductions
 ////////////////////////////////////////////////////////////////////////////////
 
-// TODO implement the dot product with cublas
+// implement the dot product with cublas
 // HINT : use cublas_handle() to get the cublas handle
 
 // computes the inner product of x and y
@@ -90,11 +171,17 @@ double ss_dot(Field const& x, Field const& y)
 {
     double result = 0.;
     const int n = x.length();
-
+	
+	auto cublasHandle = cublas_handle();
+	auto status = cublasDdot (cublasHandle, n, x.device_data(), 1, y.device_data(), 1, &result);
+	if(status != CUBLAS_STATUS_SUCCESS) {
+		std::cerr << "error: unable to execute cubals dot" << std::endl;
+		exit(-1);
+	}
     return result;
 }
 
-// TODO : implement the dot product with cublas
+// implement the dot product with cublas
 // HINT : use cublas_handle() to get the cublas handle
 
 // computes the 2-norm of x
@@ -103,6 +190,13 @@ double ss_norm2(Field const& x)
 {
     double result = 0;
     const int n = x.length();
+
+	auto cublasHandle = cublas_handle();
+	auto status = cublasDnrm2(cublasHandle, n, x.device_data(), 1, &result);
+	if(status != CUBLAS_STATUS_SUCCESS) {
+		std::cerr << "error: unable to execute cubals ss_norm2" << std::endl;
+		exit(-1);
+	}
 
     return result;
 }
@@ -135,18 +229,16 @@ void ss_copy(Field& y, Field const& x)
         (y.device_data(), x.device_data(), n);
 }
 
-// TODO : implement the wrappers for
-// ss_fill
-// ss_axpy
-// ss_scaled_diff
-// ss_scale
-// ss_lcomb
-
 // sets x := value
 // x is a vector
 // value is a scalar
 void ss_fill(Field& x, const double value)
 {
+    const int n = x.length();
+    auto grid_dim = calculate_grid_dim(block_dim, n);
+
+    kernels::fill<<<grid_dim, block_dim>>>
+        (x.device_data(), value, n);
 }
 
 // computes y := alpha*x + y
@@ -154,6 +246,11 @@ void ss_fill(Field& x, const double value)
 // alpha is a scalar
 void ss_axpy(Field& y, const double alpha, Field const& x)
 {
+    const int n = x.length();
+    auto grid_dim = calculate_grid_dim(block_dim, n);
+
+    kernels::axpy<<<grid_dim, block_dim>>>
+        (y.device_data(), x.device_data(), alpha, n);
 }
 
 // computes y = alpha*(l-r)
@@ -161,6 +258,11 @@ void ss_axpy(Field& y, const double alpha, Field const& x)
 // alpha is a scalar
 void ss_scaled_diff(Field& y, const double alpha, Field const& l, Field const& r)
 {
+    const int n = y.length();
+    auto grid_dim = calculate_grid_dim(block_dim, n);
+
+    kernels::scaled_diff<<<grid_dim, block_dim>>>
+        (y.device_data(), l.device_data(), r.device_data(), alpha, n);
 }
 
 // computes y := alpha*x
@@ -168,6 +270,11 @@ void ss_scaled_diff(Field& y, const double alpha, Field const& l, Field const& r
 // y and x are vectors
 void ss_scale(Field& y, const double alpha, Field& x)
 {
+    const int n = x.length();
+    auto grid_dim = calculate_grid_dim(block_dim, n);
+
+    kernels::scale<<<grid_dim, block_dim>>>
+        (y.device_data(), x.device_data(), alpha, n);
 }
 
 // computes linear combination of two vectors y := alpha*x + beta*z
@@ -175,6 +282,11 @@ void ss_scale(Field& y, const double alpha, Field& x)
 // y, x and z are vectors
 void ss_lcomb(Field& y, const double alpha, Field& x, const double beta, Field const& z)
 {
+    const int n = x.length();
+    auto grid_dim = calculate_grid_dim(block_dim, n);
+
+    kernels::lcomb<<<grid_dim, block_dim>>>
+        (y.device_data(), x.device_data(), z.device_data(), alpha, beta, n);
 }
 
 // conjugate gradient solver

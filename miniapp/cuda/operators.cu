@@ -54,13 +54,25 @@ void setup_params_on_device(int nx, int ny, double alpha, double dxs)
 namespace kernels {
     __global__
     void stencil_interior(double* S, const double *U) {
-        // TODO : implement the interior stencil
+        // implement the interior stencil
         // EXTRA : can you make it use shared memory?
-        //  S(i,j) = -(4. + alpha) * U(i,j)               // central point
-        //                          + U(i-1,j) + U(i+1,j) // east and west
-        //                          + U(i,j-1) + U(i,j+1) // north and south
-        //                          + alpha * x_old(i,j)
-        //                          + dxs * U(i,j) * (1.0 - U(i,j));
+        auto ix = threadIdx.x + blockDim.x*blockIdx.x + 1;
+        auto iy = threadIdx.y + blockDim.y*blockIdx.y + 1;
+
+        auto nx = params.nx;
+        auto ny = params.ny;
+        auto alpha = params.alpha;
+        auto dxs = params.dxs;
+        auto x_old = params.x_old;
+	auto id = nx * iy + ix;
+	if ( ix < nx-1 and iy < ny-1 ) {
+
+		S[id] = -(4. + alpha) * U[id]                // central point
+				      + U[id-1]  + U[id+1]   // east and west
+				      + U[id-nx] + U[id+nx]  // north and south
+				      + alpha * x_old[id]
+				      + dxs * U[id] * (1.0 - U[id]);
+	}
     }
 
     __global__
@@ -84,8 +96,13 @@ namespace kernels {
                         + alpha*params.x_old[pos] + params.bndE[j]
                         + dxs * U[pos] * (1.0 - U[pos]);
 
-            // TODO : do the stencil on the WEST side
+            // do the stencil on the WEST side
             // WEST : i = 0
+            pos = find_pos(0, j);
+            S[pos] = -(4. + alpha) * U[pos]
+                        + U[pos+1] + U[pos-nx] + U[pos+nx]
+                        + alpha*params.x_old[pos] + params.bndW[j]
+                        + dxs * U[pos] * (1.0 - U[pos]);
         }
     }
 
@@ -106,8 +123,13 @@ namespace kernels {
                         + alpha*params.x_old[pos] + params.bndN[i]
                         + dxs * U[pos] * (1.0 - U[pos]);
 
-            // TODO : do the stencil on the SOUTH side
+            // do the stencil on the SOUTH side
             // SOUTH : j = 0
+            pos = i;
+            S[pos] = -(4. + alpha) * U[pos]
+                        + U[pos-1] + U[pos+1] + U[pos+nx]
+                        + alpha*params.x_old[pos] + params.bndS[i]
+                        + dxs * U[pos] * (1.0 - U[pos]);
         }
     }
 
@@ -181,9 +203,9 @@ void diffusion(data::Field const& U, data::Field &S)
 
     // calculates the linear index into an array of width nx
     // from an (i,j) coordinate pair
-    auto idx = [&nx] (size_t i, size_t j) {
-        return i + j * nx;
-    };
+    // auto idx = [&nx] (size_t i, size_t j) {
+    //     return i + j * nx;
+    // };
 
     static bool is_initialized = false;
     if(!is_initialized) {
@@ -197,8 +219,12 @@ void diffusion(data::Field const& U, data::Field &S)
         return (n+block_dim-1)/block_dim;
     };
 
-    // TODO: apply stencil to the interior grid points
-
+    // apply stencil to the interior grid points
+    auto grid_dim_x = calculate_grid_dim(nx, 16);
+    auto grid_dim_y = calculate_grid_dim(ny, 16);
+    dim3 grid_dim(grid_dim_x, grid_dim_y);
+    dim3 block_dim(16, 16);
+    kernels::stencil_interior<<<grid_dim, block_dim>>>(S.device_data(), U.device_data());
     cudaDeviceSynchronize();    // TODO: remove after debugging
     cuda_check_last_kernel("internal kernel"); // TODO: remove after debugging
 
