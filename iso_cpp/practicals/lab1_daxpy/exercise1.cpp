@@ -102,6 +102,10 @@ bool check(double a, std::vector<double> const &y) {
 void initialize(std::vector<double> &x, std::vector<double> &y) {
   assert(x.size() == y.size());
   // TODO: Implement using the C++ Standard Template Library range algorithms
+  auto idx = std::ranges::iota_view{0, (int)x.size()};
+  // std::for_each(idx.begin(), idx.end(), [](const int i) {std::cerr << i << std::endl;});
+  std::fill(y.begin(), y.end(), 2.0);
+  std::transform(idx.begin(), idx.end(), x.begin(), [](const double i) {return i;});
 }
 
 void daxpy(double a, std::vector<double> const &x, std::vector<double> &y) {

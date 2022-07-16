@@ -38,6 +38,7 @@ namespace views = std::views;
 namespace ranges = std::ranges;
 #endif
 // TODO: add C++ standard library includes as necessary
+#include <execution>
 
 // Initialize vectors
 void initialize(std::vector<double> &x, std::vector<double> &y);
@@ -104,10 +105,15 @@ void initialize(std::vector<double> &x, std::vector<double> &y) {
   assert(x.size() == y.size());
   // TODO: Implement using the C++ parallel Standard Template Library algorithms
   // ...
+  auto idx = std::ranges::iota_view{0, (int)x.size()};
+  std::fill(std::execution::par, y.begin(), y.end(), 2.0);
+  std::transform(std::execution::par, idx.begin(), idx.end(), x.begin(), [](const double i) {return i;});
 }
 
 void daxpy(double a, std::vector<double> const &x, std::vector<double> &y) {
   assert(x.size() == y.size());
   // TODO: Implement using the C++ parallel Standard Template Library algorithms
   // ...
+  std::transform(std::execution::par, x.begin(), x.end(), y.begin(), y.begin(),
+                 [a](double x, double y) { return a * x + y; });
 }
