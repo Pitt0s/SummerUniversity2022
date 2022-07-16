@@ -6,9 +6,9 @@
 #define NO_CUDA
 #include "util.h"
 
-#ifdef _OPENACC
-// TODO: Annotate the following function accordingly in order to be called from
+#ifdef _OPENACC // TODO: Annotate the following function accordingly in order to be called from
 //       an OpenACC kernel context
+#pragma acc routine seq
 #endif
 double blur(int pos, const double *u)
 {
@@ -49,20 +49,24 @@ void blur_twice_host(double *in , double *out , int n, int nsteps)
 void blur_twice_gpu_naive(double *in , double *out , int n, int nsteps)
 {
     double *buffer = malloc_host<double>(n);
-
+#pragma acc enter data copyin(buffer[0:n])
+#pragma acc parallel
     for (auto istep = 0; istep < nsteps; ++istep) {
         // TODO: Offload the following loop to the GPU
+#pragma acc loop
         for (auto i = 1; i < n-1; ++i) {
             buffer[i] = blur(i, in);
         }
 
         // TODO: Offload the following loop to the GPU
+#pragma acc loop
         for (auto i = 2; i < n-2; ++i) {
             out[i] = blur(i, buffer);
         }
 
         in = out;
     }
+#pragma acc exit data delete(buffer)
 
     free(buffer);
 }
@@ -72,27 +76,33 @@ void blur_twice_gpu_nocopies(double *in , double *out , int n, int nsteps)
     double *buffer = malloc_host<double>(n);
 
     // TODO: Specify the data to be copied to and from the GPU
+#pragma acc enter data copyin(buffer[0:n])
     {
+#pragma acc parallel
         for (int istep = 0; istep < nsteps; ++istep) {
             int i;
 
             // TODO: Offload the following loop to the GPU
+#pragma acc loop
             for (i = 1; i < n-1; ++i) {
                 buffer[i] = blur(i, in);
             }
 
             // TODO: Offload the following loop to the GPU
+#pragma acc loop
             for (i = 2; i < n-2; ++i) {
                 out[i] = blur(i, buffer);
             }
 
             // TODO: Offload the following loop to the GPU
             //       Is it possible to just swap the pointers here?
+#pragma acc loop
             for (i = 0; i < n; ++i) {
                 in[i] = out[i];
             }
         }
     }
+#pragma acc exit data delete(buffer)
 
     free(buffer);
 }
