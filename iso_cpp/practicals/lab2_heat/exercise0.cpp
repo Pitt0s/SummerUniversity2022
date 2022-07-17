@@ -30,22 +30,26 @@
 #include <mpi.h>
 #include <vector>
 // TODO: will need some new includes here
+#include <algorithm>
+#include <execution>
+#include <numeric>
 
-#if defined(__NVCOMPILER)
-#include <thrust/iterator/counting_iterator.h>
-#elif defined(__clang__) || __cplusplus < 202002L
+// #if defined(__NVCOMPILER)
+// #include <thrust/iterator/counting_iterator.h>
+// #elif defined(__clang__) || __cplusplus < 202002L
+// // clang does not support libstdc++ ranges
+// #include <range/v3/all.hpp>
+// namespace views = ranges::views;
 // clang does not support libstdc++ ranges
 #include <range/v3/all.hpp>
+
+// #elif __cplusplus >= 202002L
+// #include <ranges>
+// namespace views = std::views;
+// namespace ranges = std::ranges;
+// #endif
 namespace views = ranges::views;
 
-// clang does not support libstdc++ ranges
-#include <range/v3/all.hpp>
-namespace views = ranges::views;
-#elif __cplusplus >= 202002L
-#include <ranges>
-namespace views = std::views;
-namespace ranges = std::ranges;
-#endif
 
 // Problem parameters
 struct parameters {
@@ -113,13 +117,23 @@ struct grid {
 };
 
 double stencil(double *u_new, double *u_old, grid g, parameters p) {
-  double energy = 0.;
+  // double energy = 0.;
   // TODO: implement using parallel algorithms with linear indexing or views::cartesian
+  auto xs = views::iota(g.x_start, g.x_end);
+  auto ys = views::iota(g.y_start, g.y_end);
+  auto r  = views::cartesian_product(xs, ys);
+  auto energy = std::transform_reduce(std::execution::par, r.begin(), r.end(), 0.,
+                                      std::plus{}, [u_new, u_old, p] (auto idx) { 
+                                          auto [x, y] = idx;
+                                          return stencil(u_new, u_old, x, y, p); 
+                                      });
   return energy;
 }
 
 // Initial condition
 void initialize(double *u_new, double *u_old, long n) {
+  std::fill(std::execution::par_unseq, u_new, u_new+n, 0.);
+  std::fill(std::execution::par_unseq, u_old, u_old+n, 0.);
   // TODO: implement initialization using parallel algorithms
 }
 
